@@ -1,0 +1,93 @@
+# Basic auth credentials secret (username:password pairs, bcrypt hashed)
+# Users: admin / agentgateway-demo
+apiVersion: v1
+kind: Secret
+metadata:
+  name: basic-auth-credentials
+  namespace: agentgateway-system
+type: Opaque
+stringData:
+  # htpasswd format: admin:$2y$10$... (bcrypt hash of "agentgateway-demo")
+  auth: "admin:$2y$10$PrTX8TWxdoaE/JnN6kmE8Oapqfk6qQLye9bHpM/KsZ9JKb4PzT4p."
+---
+# AuthConfig for basic auth on UI routes
+apiVersion: extauth.solo.io/v1
+kind: AuthConfig
+metadata:
+  name: basic-auth
+  namespace: agentgateway-system
+spec:
+  configs:
+  - basicAuth:
+      apr:
+        users:
+          admin:
+            hashedPassword: "$2y$10$PrTX8TWxdoaE/JnN6kmE8Oapqfk6qQLye9bHpM/KsZ9JKb4PzT4p."
+---
+# Apply basic auth to ArgoCD route
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: argocd-basic-auth
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: argocd
+  traffic:
+    entExtAuth:
+      authConfigRef:
+        name: basic-auth
+        namespace: agentgateway-system
+---
+# Apply basic auth to Keycloak route
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: keycloak-basic-auth
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: keycloak
+  traffic:
+    entExtAuth:
+      authConfigRef:
+        name: basic-auth
+        namespace: agentgateway-system
+---
+# Apply basic auth to Grafana route
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: grafana-basic-auth
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: grafana
+  traffic:
+    entExtAuth:
+      authConfigRef:
+        name: basic-auth
+        namespace: agentgateway-system
+---
+# Apply basic auth to Gloo UI route
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: gloo-ui-basic-auth
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: gloo-ui
+  traffic:
+    entExtAuth:
+      authConfigRef:
+        name: basic-auth
+        namespace: agentgateway-system

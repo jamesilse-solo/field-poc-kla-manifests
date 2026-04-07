@@ -25,7 +25,7 @@ variable "node_instance_type" {
 variable "node_count" {
   description = "Number of nodes in the node group"
   type        = number
-  default     = 2
+  default     = 3
 }
 
 variable "vpc_cidr" {
