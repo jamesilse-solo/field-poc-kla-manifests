@@ -9,21 +9,23 @@ spec:
     host: keycloak.keycloak.svc.cluster.local
     port: 8080
 ---
-# JWT authentication on Bedrock routes
+# JWT authentication (Gateway-wide, Permissive mode)
+# Validates JWT if present, extracts claims to headers
+# Routes without JWT fall through to their own auth (basic auth on UI routes)
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayPolicy
 metadata:
-  name: bedrock-jwt-auth
+  name: gateway-jwt-auth
   namespace: agentgateway-system
 spec:
   targetRefs:
   - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: bedrock
+    kind: Gateway
+    name: agentgateway-proxy
   traffic:
     phase: PreRouting
     jwtAuthentication:
-      mode: Strict
+      mode: Permissive
       providers:
       - issuer: http://keycloak.keycloak.svc.cluster.local:8080/realms/kla-demo
         jwks:
@@ -44,66 +46,8 @@ spec:
         - name: x-org
           value: jwt['org']
 ---
-# JWT authentication on Mock route
-apiVersion: enterpriseagentgateway.solo.io/v1alpha1
-kind: EnterpriseAgentgatewayPolicy
-metadata:
-  name: mock-jwt-auth
-  namespace: agentgateway-system
-spec:
-  targetRefs:
-  - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: mock
-  traffic:
-    phase: PreRouting
-    jwtAuthentication:
-      mode: Strict
-      providers:
-      - issuer: http://keycloak.keycloak.svc.cluster.local:8080/realms/kla-demo
-        jwks:
-          remote:
-            backendRef:
-              name: keycloak-jwks
-              namespace: agentgateway-system
-              kind: AgentgatewayBackend
-              group: agentgateway.dev
-            jwksPath: realms/kla-demo/protocol/openid-connect/certs
-    transformation:
-      request:
-        set:
-        - name: x-user-id
-          value: jwt['preferred_username']
-        - name: x-user-tier
-          value: jwt['tier']
----
-# JWT authentication on MCP route
-apiVersion: enterpriseagentgateway.solo.io/v1alpha1
-kind: EnterpriseAgentgatewayPolicy
-metadata:
-  name: mcp-jwt-auth
-  namespace: agentgateway-system
-spec:
-  targetRefs:
-  - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: mcp
-  traffic:
-    phase: PreRouting
-    jwtAuthentication:
-      mode: Strict
-      providers:
-      - issuer: http://keycloak.keycloak.svc.cluster.local:8080/realms/kla-demo
-        jwks:
-          remote:
-            backendRef:
-              name: keycloak-jwks
-              namespace: agentgateway-system
-              kind: AgentgatewayBackend
-              group: agentgateway.dev
-            jwksPath: realms/kla-demo/protocol/openid-connect/certs
----
-# RBAC on LLM routes (requires jwt.org == "kla")
+# RBAC + JWT enforcement on LLM/MCP routes
+# These routes REQUIRE a valid JWT (enforced via authorization)
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayPolicy
 metadata:
