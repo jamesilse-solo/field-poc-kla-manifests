@@ -9,7 +9,7 @@ spec:
     host: keycloak.keycloak.svc.cluster.local
     port: 8080
 ---
-# JWT authentication + RBAC policy (PreRouting phase)
+# JWT authentication (PreRouting) — validates token, extracts claims to headers
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayPolicy
 metadata:
@@ -34,10 +34,6 @@ spec:
               kind: AgentgatewayBackend
               group: agentgateway.dev
             jwksPath: /realms/kla-demo/protocol/openid-connect/certs
-    authorization:
-      policy:
-        matchExpressions:
-        - 'jwt.org == "kla" || jwt.realm_access.roles.exists(r, r == "admin")'
     transformation:
       request:
         set:
@@ -47,3 +43,20 @@ spec:
           value: jwt['tier']
         - name: x-org
           value: jwt['org']
+---
+# RBAC authorization — separate policy (default phase)
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: gateway-rbac
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+  traffic:
+    authorization:
+      policy:
+        matchExpressions:
+        - 'jwt.org == "kla"'

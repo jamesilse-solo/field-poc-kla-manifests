@@ -7,7 +7,7 @@ CLIENT_ID="agw-client"
 CLIENT_SECRET="agw-client-secret"
 
 echo "=== Waiting for Keycloak to be ready ==="
-until curl -sf "${KEYCLOAK_URL}/health/ready" > /dev/null 2>&1; do
+until curl -sf "${KEYCLOAK_URL}/realms/master" > /dev/null 2>&1; do
   echo "  Waiting..."
   sleep 5
 done
@@ -59,6 +59,22 @@ curl -s -X POST "${KEYCLOAK_URL}/admin/realms/${REALM}/clients" \
 CLIENT_UUID=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/clients" \
   -H "Authorization: Bearer ${ADMIN_TOKEN}" | jq -r ".[] | select(.clientId==\"${CLIENT_ID}\") | .id")
 echo "Client UUID: ${CLIENT_UUID}"
+
+echo ""
+echo "=== Adding custom attributes to User Profile (required for Keycloak 26+) ==="
+PROFILE=$(curl -s "${KEYCLOAK_URL}/admin/realms/${REALM}/users/profile" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}")
+UPDATED_PROFILE=$(echo "$PROFILE" | jq '.attributes += [
+  {"name":"org","displayName":"Organization","permissions":{"view":["admin","user"],"edit":["admin"]},"validations":{}},
+  {"name":"team","displayName":"Team","permissions":{"view":["admin","user"],"edit":["admin"]},"validations":{}},
+  {"name":"tier","displayName":"Tier","permissions":{"view":["admin","user"],"edit":["admin"]},"validations":{}},
+  {"name":"role","displayName":"Role","permissions":{"view":["admin","user"],"edit":["admin"]},"validations":{}}
+]')
+curl -s -X PUT "${KEYCLOAK_URL}/admin/realms/${REALM}/users/profile" \
+  -H "Authorization: Bearer ${ADMIN_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d "$UPDATED_PROFILE" > /dev/null
+echo "User Profile updated"
 
 echo ""
 echo "=== Adding protocol mappers for custom claims ==="
