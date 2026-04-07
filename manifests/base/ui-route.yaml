@@ -11,6 +11,12 @@ spec:
     - path:
         type: PathPrefix
         value: /ui
+    filters:
+    - type: URLRewrite
+      urlRewrite:
+        path:
+          type: ReplacePrefixMatch
+          replacePrefixMatch: /
     backendRefs:
     - name: solo-enterprise-ui
       port: 80
