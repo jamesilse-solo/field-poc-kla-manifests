@@ -1,31 +1,31 @@
-# Basic auth credentials secret (username:password pairs, bcrypt hashed)
-# Users: admin / agentgateway-demo
+# API key secrets for UI route access
 apiVersion: v1
 kind: Secret
 metadata:
-  name: basic-auth-credentials
+  name: ui-admin-key
   namespace: agentgateway-system
-type: Opaque
+  labels:
+    api-key-group: ui-access
+type: extauth.solo.io/apikey
 stringData:
-  # htpasswd format: admin:$2y$10$... (bcrypt hash of "agentgateway-demo")
-  auth: "admin:$apr1$FNtCJ/Qf$uVtb44W/4ROb48DW17cDz/"
+  api-key: agw-demo-2026
+  x-user-id: admin
 ---
-# AuthConfig for basic auth on UI routes
+# AuthConfig for UI routes (API key via x-api-key header)
 apiVersion: extauth.solo.io/v1
 kind: AuthConfig
 metadata:
-  name: basic-auth
+  name: ui-auth
   namespace: agentgateway-system
 spec:
   configs:
-  - basicAuth:
-      apr:
-        users:
-          admin:
-            hashedPassword: "{SHA}L4FiHNzoAYXDGZviJZ7Gjh3J3g0="
-            salt: ""
+  - apiKeyAuth:
+      headerName: x-api-key
+      k8sSecretApikeyStorage:
+        labelSelector:
+          api-key-group: ui-access
 ---
-# Apply basic auth to ArgoCD route
+# Apply to ArgoCD route
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayPolicy
 metadata:
@@ -39,10 +39,10 @@ spec:
   traffic:
     entExtAuth:
       authConfigRef:
-        name: basic-auth
+        name: ui-auth
         namespace: agentgateway-system
 ---
-# Apply basic auth to Keycloak route
+# Apply to Keycloak route
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayPolicy
 metadata:
@@ -56,10 +56,10 @@ spec:
   traffic:
     entExtAuth:
       authConfigRef:
-        name: basic-auth
+        name: ui-auth
         namespace: agentgateway-system
 ---
-# Apply basic auth to Grafana route
+# Apply to Grafana route
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayPolicy
 metadata:
@@ -73,10 +73,10 @@ spec:
   traffic:
     entExtAuth:
       authConfigRef:
-        name: basic-auth
+        name: ui-auth
         namespace: agentgateway-system
 ---
-# Apply basic auth to Gloo UI route
+# Apply to Gloo UI route
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayPolicy
 metadata:
@@ -90,5 +90,5 @@ spec:
   traffic:
     entExtAuth:
       authConfigRef:
-        name: basic-auth
+        name: ui-auth
         namespace: agentgateway-system
