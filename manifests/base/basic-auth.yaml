@@ -22,7 +22,8 @@ spec:
       apr:
         users:
           admin:
-            hashedPassword: "$apr1$FNtCJ/Qf$uVtb44W/4ROb48DW17cDz/"
+            hashedPassword: "{SHA}L4FiHNzoAYXDGZviJZ7Gjh3J3g0="
+            salt: ""
 ---
 # Apply basic auth to ArgoCD route
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
