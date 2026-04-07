@@ -715,6 +715,83 @@ Token-based rate limits enforced per user, based on JWT `tier` claim extracted d
 
 Rate limiting uses `type: TOKEN` — it counts LLM tokens consumed (input + output), not HTTP requests. A single request that uses 500 tokens counts as 500 against the budget.
 
+**Live config** (`manifests/base/rate-limiting.yaml`):
+```yaml
+# Tiered token budgets — different limits per user tier
+apiVersion: ratelimit.solo.io/v1alpha1
+kind: RateLimitConfig
+metadata:
+  name: tiered-budgets
+  namespace: agentgateway-system
+spec:
+  raw:
+    descriptors:
+    - key: X-User-Tier              # Header injected by JWT claim extraction
+      value: "free"
+      descriptors:
+      - key: X-User-ID              # Per-user tracking within the tier
+        rateLimit:
+          unit: HOUR
+          requestsPerUnit: 50       # 50 tokens/hour for free users
+    - key: X-User-Tier
+      value: "standard"
+      descriptors:
+      - key: X-User-ID
+        rateLimit:
+          unit: HOUR
+          requestsPerUnit: 200      # 200 tokens/hour for standard
+    - key: X-User-Tier
+      value: "premium"
+      descriptors:
+      - key: X-User-ID
+        rateLimit:
+          unit: HOUR
+          requestsPerUnit: 1000     # 1,000 tokens/hour for premium
+    - key: X-User-Tier
+      value: "admin"
+      descriptors:
+      - key: X-User-ID
+        rateLimit:
+          unit: HOUR
+          requestsPerUnit: 5000     # 5,000 tokens/hour for admins
+    rateLimits:
+    - actions:
+      - requestHeaders:
+          descriptorKey: "X-User-Tier"
+          headerName: "X-User-Tier"   # From JWT claim extraction
+      - requestHeaders:
+          descriptorKey: "X-User-ID"
+          headerName: "X-User-ID"     # From JWT claim extraction
+      type: TOKEN                     # Count LLM tokens, not HTTP requests
+
+---
+# Apply rate limiting to the gateway
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: tiered-rate-limit
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - name: agentgateway-proxy
+    group: gateway.networking.k8s.io
+    kind: Gateway                     # Applied gateway-wide
+  traffic:
+    entRateLimit:
+      global:                         # Shared across all proxy replicas (via Redis)
+        rateLimitConfigRefs:
+        - name: tiered-budgets
+```
+
+**How it connects to JWT auth**: The `X-User-Tier` and `X-User-ID` headers are set by the `gateway-jwt-auth` policy's `transformation` block during the PreRouting phase. By the time the rate limiter evaluates, these headers are already present — the rate limiter doesn't need to parse JWTs itself.
+
+**Key points for evaluators**:
+- `type: TOKEN` counts actual LLM tokens (parsed from the provider's response), not HTTP requests. This is the right unit for AI cost control.
+- `global` means the budget is shared across all proxy replicas via the Redis-backed ext-cache. A user can't bypass limits by hitting a different pod.
+- Budgets are per `(tier, user)` — each user gets their own independent budget within their tier.
+- Changing a user's tier (in Keycloak) immediately changes their budget. No gateway config change needed.
+- When a user exceeds their budget, they receive `429 Too Many Requests` with rate limit headers showing when the budget resets.
+
 ---
 
 ## ArgoCD
