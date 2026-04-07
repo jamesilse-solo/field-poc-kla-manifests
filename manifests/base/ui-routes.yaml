@@ -69,7 +69,7 @@ spec:
         type: PathPrefix
         value: /grafana
     backendRefs:
-    - name: grafana-prometheus
+    - name: prometheus-grafana
       namespace: monitoring
       port: 3000
     timeouts:
