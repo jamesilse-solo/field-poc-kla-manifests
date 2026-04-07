@@ -106,24 +106,35 @@ This section walks through the security architecture deployed in this demo. Each
 
 ### Architecture Overview
 
-```
-                        ┌─────────────────────────────────────────────┐
-                        │          AgentGateway Proxy                 │
-  User/Agent            │                                             │
-  ───────────►  TLS ──► │  JWT Validation ──► RBAC ──► Rate Limit ──► │ ──► LLM / MCP Backend
-  (Bearer JWT)          │  (PreRouting)       (CEL)    (per-user)     │
-                        │                                             │
-  Browser               │  API Key Auth ──────────────────────────────│ ──► Management UI
-  (x-api-key header)    │  (ext-auth)                                 │
-                        │                                             │
-                        │  Guardrails (regex + builtins) ─────────────│ ──► Bedrock only
-                        └─────────────────────────────────────────────┘
-                                        │
-                              ┌─────────┴─────────┐
-                              │    Keycloak IdP    │
-                              │  (JWKS, users,     │
-                              │   roles, claims)   │
-                              └────────────────────┘
+```mermaid
+flowchart LR
+    subgraph Clients
+        A["User / Agent<br/>(Bearer JWT)"]
+        B["Browser<br/>(x-api-key header)"]
+    end
+
+    subgraph AGW["AgentGateway Proxy"]
+        direction LR
+        TLS["TLS<br/>Termination"]
+        JWT["JWT Validation<br/>(PreRouting)"]
+        RBAC["RBAC<br/>(CEL)"]
+        RL["Rate Limit<br/>(per-user)"]
+        APIKEY["API Key Auth<br/>(ext-auth)"]
+        GR["Guardrails<br/>(regex + builtins)"]
+    end
+
+    subgraph Backends
+        LLM["LLM / MCP<br/>Backend"]
+        UI["Management<br/>UI"]
+    end
+
+    KC["Keycloak IdP<br/>(JWKS, users, roles, claims)"]
+
+    A --> TLS --> JWT --> RBAC --> RL --> LLM
+    B --> TLS
+    TLS --> APIKEY --> UI
+    JWT --> GR --> LLM
+    KC -.->|JWKS| JWT
 ```
 
 Two auth layers serve different audiences:
@@ -291,22 +302,43 @@ curl -sk -H "x-api-key: wrong-key" "https://$GW/ui"
 **What's deployed**: User-to-agent auth via JWT. Agent-to-agent via the OBO (On-Behalf-Of) token exchange pattern (architecture shown here; full OBO requires enabling the STS endpoint on the controller).
 
 **User-to-agent flow** (deployed and working):
-```
-User (alice) ──► Keycloak login ──► JWT with claims ──► AgentGateway ──► LLM Backend
-                                    {org: "kla",         validates JWT,    sees only
-                                     tier: "premium",    extracts claims,  x-user-id: alice
-                                     preferred_username}  enforces RBAC    x-user-tier: premium
+
+```mermaid
+sequenceDiagram
+    participant User as User (alice)
+    participant KC as Keycloak
+    participant AGW as AgentGateway
+    participant LLM as LLM Backend
+
+    User->>KC: Authenticate (username + password)
+    KC-->>User: JWT {org: "kla", tier: "premium", preferred_username: "alice"}
+    User->>AGW: Request + Bearer JWT
+    AGW->>AGW: Validate JWT signature (JWKS)
+    AGW->>AGW: Extract claims to headers
+    AGW->>AGW: RBAC check (jwt.org == "kla")
+    AGW->>LLM: Forward with x-user-id: alice, x-user-tier: premium
+    LLM-->>AGW: Response
+    AGW-->>User: Response
 ```
 
 The user authenticates with Keycloak and receives a JWT. The gateway validates the JWT, extracts identity into headers, and the LLM backend receives a clean, trusted identity — it never handles raw credentials.
 
 **Agent-to-agent flow** (OBO architecture):
-```
-User (alice) ──► Agent A (in-cluster pod) ──► STS token exchange ──► Agent B / MCP Tool
-                 has alice's JWT               exchanges user JWT      receives delegated
-                 + K8s service account         for a delegated token   token with:
-                 token as actor                signed by AGW STS       sub: alice
-                                                                       act: {sub: agent-a}
+
+```mermaid
+sequenceDiagram
+    participant User as User (alice)
+    participant A as Agent A (K8s Pod)
+    participant STS as AGW STS (port 7777)
+    participant B as Agent B / MCP Tool
+
+    User->>A: Request + alice's JWT
+    Note over A: Has alice's JWT (subject)<br/>+ K8s SA token (actor)
+    A->>STS: Token Exchange (RFC 8693)<br/>subject_token=alice JWT<br/>actor_token=K8s SA token
+    STS->>STS: Validate subject (Keycloak JWKS)<br/>Validate actor (K8s TokenReview)
+    STS-->>A: Delegated token {sub: alice, act: {sub: agent-a}}
+    A->>B: Request + delegated token
+    Note over B: Knows: user=alice,<br/>agent=agent-a
 ```
 
 Enterprise AgentGateway includes a built-in STS (Security Token Service) that implements [RFC 8693 Token Exchange](https://datatracker.ietf.org/doc/html/rfc8693). An agent (running as a Kubernetes pod) presents:
