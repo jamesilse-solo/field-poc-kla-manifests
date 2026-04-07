@@ -1,3 +1,5 @@
+# Gloo UI served at root path — catches all unmatched paths
+# Other routes (/argocd, /bedrock, /mock, /mcp, /keycloak, /grafana) take priority via PathPrefix
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -10,13 +12,7 @@ spec:
   - matches:
     - path:
         type: PathPrefix
-        value: /ui
-    filters:
-    - type: URLRewrite
-      urlRewrite:
-        path:
-          type: ReplacePrefixMatch
-          replacePrefixMatch: /
+        value: /
     backendRefs:
     - name: solo-enterprise-ui
       port: 80
