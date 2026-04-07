@@ -1,0 +1,49 @@
+# Keycloak JWKS backend for JWT validation
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: keycloak-jwks
+  namespace: agentgateway-system
+spec:
+  static:
+    host: keycloak.keycloak.svc.cluster.local
+    port: 8080
+---
+# JWT authentication + RBAC policy (PreRouting phase)
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: gateway-jwt-auth
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+  traffic:
+    phase: PreRouting
+    jwtAuthentication:
+      mode: Strict
+      providers:
+      - issuer: http://keycloak.keycloak.svc.cluster.local:8080/realms/kla-demo
+        jwks:
+          remote:
+            backendRef:
+              name: keycloak-jwks
+              namespace: agentgateway-system
+              kind: AgentgatewayBackend
+              group: agentgateway.dev
+            jwksPath: /realms/kla-demo/protocol/openid-connect/certs
+    authorization:
+      policy:
+        matchExpressions:
+        - 'jwt.org == "kla" || jwt.realm_access.roles.exists(r, r == "admin")'
+    transformation:
+      request:
+        set:
+        - name: x-user-id
+          value: jwt['preferred_username']
+        - name: x-user-tier
+          value: jwt['tier']
+        - name: x-org
+          value: jwt['org']
