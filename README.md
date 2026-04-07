@@ -595,6 +595,97 @@ Applied to `/bedrock/*` routes via `EnterpriseAgentgatewayPolicy` with `promptGu
 
 Response guards mask PII and secrets in LLM output (action: `Mask`).
 
+**Live config** (`manifests/base/guardrails.yaml`):
+```yaml
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: bedrock-guardrails
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: bedrock                   # Only applied to Bedrock LLM routes
+  backend:
+    ai:
+      promptGuard:
+        request:
+        # Guard 1: Prompt injection — system override attempts
+        - regex:
+            action: Reject
+            matches:
+            - "(?i)(ignore|disregard|forget|override|bypass)\\s+(all\\s+|any\\s+|your\\s+)?(previous|prior|earlier|existing|current)\\s+(instructions|rules|guidelines|directives|constraints)"
+            - "(?i)(from now on|effective immediately|starting now)\\s*(,\\s+)?(you\\s+)?(will|shall|must|should)\\s+(be|act|respond|behave)"
+          response:
+            message: "Request blocked: prompt injection detected."
+            statusCode: 403
+        # Guard 2: Jailbreak — DAN & role hijacking
+        - regex:
+            action: Reject
+            matches:
+            - "(?i)(you are now|from now on you are)\\s+(a |an )?(unrestricted|unfiltered|DAN|jailbroken|evil)"
+            - "(?i)(do anything now|DAN mode|enable DAN|activate DAN)"
+            - "(?i)(enter|enable|activate|switch to)\\s+(developer|dev|debug|admin|sudo|root|god|jailbreak)\\s*(mode|access)"
+          response:
+            message: "Request blocked: jailbreak attempt detected."
+            statusCode: 403
+        # Guard 3: System prompt extraction
+        - regex:
+            action: Reject
+            matches:
+            - "(?i)(show|reveal|output|tell|share|repeat|dump|expose)\\s+(me\\s+)?(your|the)?\\s*(system|initial|hidden|secret|internal)\\s*(prompt|instructions?|message|configuration)"
+          response:
+            message: "Request blocked: system prompt extraction attempt."
+            statusCode: 403
+        # Guard 4: PII detection (built-in patterns)
+        - regex:
+            action: Reject
+            builtins:
+            - CreditCard
+            - Ssn
+            - Email
+            - PhoneNumber
+          response:
+            message: "Request blocked: PII detected."
+            statusCode: 422
+        # Guard 5: Credentials & secrets
+        - regex:
+            action: Reject
+            matches:
+            - "\\bAKIA[0-9A-Z]{16}\\b"                    # AWS access keys
+            - "\\bsk-[a-zA-Z0-9_-]{20,}\\b"               # OpenAI/Anthropic API keys
+            - "-----BEGIN\\s+(RSA\\s+|EC\\s+)?PRIVATE KEY-----"
+            - "(?i)(password|secret|token|api[_-]?key)\\s*[=:]\\s*[\"']?[^\\s\"']{8,}"
+          response:
+            message: "Request blocked: credentials or secrets detected."
+            statusCode: 422
+        response:
+        # Response Guard 1: PII masking in LLM output
+        - regex:
+            action: Mask           # Redact rather than reject
+            builtins:
+            - CreditCard
+            - Ssn
+            - Email
+            - PhoneNumber
+        # Response Guard 2: Secret masking in LLM output
+        - regex:
+            action: Mask
+            matches:
+            - "\\bAKIA[0-9A-Z]{16}\\b"
+            - "\\bsk-[a-zA-Z0-9_-]{20,}\\b"
+            - "(?i)(password|secret|token|api[_-]?key)\\s*[=:]\\s*[\"']?[^\\s\"']{8,}"
+```
+
+**Key points for evaluators**:
+- Guards are regex-based and run inline at the proxy — no external service call, sub-millisecond overhead.
+- Request guards use `action: Reject` (block with HTTP error). Response guards use `action: Mask` (redact sensitive content but still return the response).
+- `builtins` provide pre-built patterns for common PII types (credit cards, SSNs, etc.) without writing regex.
+- Targeted via `targetRefs` to specific routes — you can have different guardrail policies per LLM provider or per team.
+- For more sophisticated content moderation, Enterprise AgentGateway also supports webhook-based guardrails (call an external LLM as a classifier) and OpenAI's moderation API endpoint.
+
+**Try it**:
 ```bash
 # Prompt injection → 403
 curl -sk "https://$GW/bedrock/haiku" \
