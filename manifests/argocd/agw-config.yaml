@@ -1,0 +1,22 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agw-config
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/jamesilse-solo/field-poc-kla-manifests.git
+      targetRevision: main
+      path: manifests/base
+    - repoURL: https://github.com/jamesilse-solo/field-poc-kla-manifests.git
+      targetRevision: main
+      path: manifests/monitoring
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
