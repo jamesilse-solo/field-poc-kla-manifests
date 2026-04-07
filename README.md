@@ -6,7 +6,7 @@
 |---|---|
 | **Cluster** | `kla-agentic-cluster` |
 | **Region** | us-west-2 |
-| **Nodes** | 2x t3.large (on-demand) |
+| **Nodes** | 3x t3.large (on-demand) |
 | **K8s Version** | 1.35 |
 | **AWS Profile** | `Field-Engineering-Team-986112284769` |
 
@@ -20,8 +20,11 @@ aws eks update-kubeconfig --region us-west-2 --name kla-agentic-cluster
 export GW=$(kubectl get svc -n agentgateway-system \
   --selector=gateway.networking.k8s.io/gateway-name=agentgateway-proxy \
   -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}')
-echo "http://$GW:8080"
+echo "HTTP:  http://$GW:8080"
+echo "HTTPS: https://$GW"
 ```
+
+**TLS**: Self-signed cert via cert-manager, terminated at the gateway. Use `-k` with curl or accept the cert in browser.
 
 ---
 
@@ -181,7 +184,7 @@ kubectl port-forward svc/argocd-server -n argocd 8443:443
 # Open https://localhost:8443
 ```
 
-Also exposed through gateway at `http://<GW>:8080/argocd` (requires JWT).
+Also exposed through gateway at `https://<GW>/argocd` (requires API key: `x-api-key: agw-demo-2026`).
 
 | | |
 |---|---|
@@ -219,7 +222,32 @@ kubectl port-forward svc/solo-enterprise-ui -n agentgateway-system 4000:80
 # Open http://localhost:4000
 ```
 
-Also exposed at `http://<GW>:8080/ui` (requires JWT).
+Also exposed at `https://<GW>/ui` (requires API key).
+
+---
+
+## UI Routes (via Gateway + TLS)
+
+All management UIs are exposed through the gateway on HTTPS with API key auth.
+
+| Service | URL | Auth |
+|---|---|---|
+| ArgoCD | `https://<GW>/argocd` | `x-api-key: agw-demo-2026` |
+| Keycloak | `https://<GW>/keycloak` | `x-api-key: agw-demo-2026` |
+| Grafana | `https://<GW>/grafana` | `x-api-key: agw-demo-2026` |
+| Gloo UI | `https://<GW>/ui` | `x-api-key: agw-demo-2026` |
+
+```bash
+# Test
+curl -sk -H "x-api-key: agw-demo-2026" "https://$GW/ui"
+```
+
+### TLS
+
+- Self-signed CA via cert-manager (ClusterIssuer → CA Issuer → Certificate)
+- TLS terminates at the AgentGateway proxy (port 8443)
+- NLB forwards port 443 → 8443 (TCP passthrough)
+- HTTP still available on port 8080 for API calls
 
 ---
 
