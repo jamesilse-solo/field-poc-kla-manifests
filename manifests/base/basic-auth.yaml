@@ -8,7 +8,7 @@ metadata:
 type: Opaque
 stringData:
   # htpasswd format: admin:$2y$10$... (bcrypt hash of "agentgateway-demo")
-  auth: "admin:$2y$10$PrTX8TWxdoaE/JnN6kmE8Oapqfk6qQLye9bHpM/KsZ9JKb4PzT4p."
+  auth: "admin:$apr1$FNtCJ/Qf$uVtb44W/4ROb48DW17cDz/"
 ---
 # AuthConfig for basic auth on UI routes
 apiVersion: extauth.solo.io/v1
@@ -22,7 +22,7 @@ spec:
       apr:
         users:
           admin:
-            hashedPassword: "$2y$10$PrTX8TWxdoaE/JnN6kmE8Oapqfk6qQLye9bHpM/KsZ9JKb4PzT4p."
+            hashedPassword: "$apr1$FNtCJ/Qf$uVtb44W/4ROb48DW17cDz/"
 ---
 # Apply basic auth to ArgoCD route
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
