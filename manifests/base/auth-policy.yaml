@@ -33,7 +33,7 @@ spec:
               namespace: agentgateway-system
               kind: AgentgatewayBackend
               group: agentgateway.dev
-            jwksPath: /realms/kla-demo/protocol/openid-connect/certs
+            jwksPath: realms/kla-demo/protocol/openid-connect/certs
     transformation:
       request:
         set:
