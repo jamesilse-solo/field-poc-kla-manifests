@@ -36,6 +36,11 @@ spec:
               kind: AgentgatewayBackend
               group: agentgateway.dev
             jwksPath: realms/kla-demo/protocol/openid-connect/certs
+      # Demo provider: inline JWKS for pre-minted demo tokens (Dex issuer)
+      - issuer: http://dex.dex.svc.cluster.local:5556
+        jwks:
+          inline: |
+            {"keys":[{"kty":"RSA","kid":"kla-demo-key-2026","alg":"RS256","use":"sig","n":"sGAIit8pPTHIR9IuMkS3GHLrqz3G0L-_0YhI2Dw-OtEgc-Za2xnMIQ96RibB-X1qUOhd0xKAKcXWNU6Gg41oy25kJbu2NDFjh9YB-NLncQqD0YTilTDnbq20ZjncvLTGokzWBM02_zoa6bxDPPAVLrS4Ty8ZXppA7FP6Zajfc8kgc20vb9sszxBMwx7Oi-okmWWsaJnR24RSMvhA00FuPIdC-wUI5KrxX2FFPLjWH98pTLT7zr-KEUyg4PTVr2GguM2bPMLl_Ya1509upsUsJXsAFYhgWvsR4K90kud-TjIVlshnzpmzTfLgh_uHTUU3PmwURtfjgWP_T4YfvA77Lw","e":"AQAB"}]}
     transformation:
       request:
         set:
@@ -64,6 +69,9 @@ spec:
   - group: gateway.networking.k8s.io
     kind: HTTPRoute
     name: mcp
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-docs
   traffic:
     authorization:
       policy:
