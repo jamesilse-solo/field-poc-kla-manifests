@@ -1,0 +1,41 @@
+# Source: fe-enterprise-agentgateway-workshop/remote-mcp.md
+# Adapted for KLA demo — 2026-04-22
+# Routes /mcp/docs to the search.solo.io MCP server (public endpoint)
+# Demonstrates remote MCP federation: gateway proxies tool calls to external MCP servers
+apiVersion: agentgateway.dev/v1alpha1
+kind: AgentgatewayBackend
+metadata:
+  name: soloio-docs-mcp
+  namespace: agentgateway-system
+  labels:
+    demo-customer: kla
+spec:
+  mcp:
+    targets:
+    - name: soloio-docs
+      static:
+        host: search.solo.io
+        port: 443
+        protocol: StreamableHTTP
+        policies:
+          tls: {}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: mcp-docs
+  namespace: agentgateway-system
+  labels:
+    demo-customer: kla
+spec:
+  parentRefs:
+  - name: agentgateway-proxy
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /mcp/docs
+    backendRefs:
+    - name: soloio-docs-mcp
+      group: agentgateway.dev
+      kind: AgentgatewayBackend

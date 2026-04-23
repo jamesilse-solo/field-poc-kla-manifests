@@ -1,0 +1,77 @@
+# Source: fe-enterprise-agentgateway-workshop/jwt-auth-with-rbac.md
+# Adapted for KLA demo — 2026-04-22
+# Replaces Keycloak JWKS backend with inline demo keys signed by gen-token.sh
+# Issuer matches what Dex would issue; tokens are pre-minted for demo reliability.
+# NOTE: Apply this AFTER deploying base manifests. ArgoCD may revert — pause sync if needed.
+
+# Remove keycloak-jwks backend (no longer needed for inline JWKS)
+# kubectl delete agentgatewaybackend keycloak-jwks -n agentgateway-system --ignore-not-found
+---
+# JWT authentication (gateway-wide, Permissive — validates if present)
+# Replaces base/auth-policy.yaml gateway-jwt-auth
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: gateway-jwt-auth
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: Gateway
+    name: agentgateway-proxy
+  traffic:
+    phase: PreRouting
+    jwtAuthentication:
+      mode: Permissive
+      providers:
+      - issuer: http://dex.dex.svc.cluster.local:5556
+        jwks:
+          inline: |
+            {
+              "keys": [
+                {
+                  "kty": "RSA",
+                  "kid": "kla-demo-key-2026",
+                  "alg": "RS256",
+                  "use": "sig",
+                  "n": "sGAIit8pPTHIR9IuMkS3GHLrqz3G0L-_0YhI2Dw-OtEgc-Za2xnMIQ96RibB-X1qUOhd0xKAKcXWNU6Gg41oy25kJbu2NDFjh9YB-NLncQqD0YTilTDnbq20ZjncvLTGokzWBM02_zoa6bxDPPAVLrS4Ty8ZXppA7FP6Zajfc8kgc20vb9sszxBMwx7Oi-okmWWsaJnR24RSMvhA00FuPIdC-wUI5KrxX2FFPLjWH98pTLT7zr-KEUyg4PTVr2GguM2bPMLl_Ya1509upsUsJXsAFYhgWvsR4K90kud-TjIVlshnzpmzTfLgh_uHTUU3PmwURtfjgWP_T4YfvA77Lw",
+                  "e": "AQAB"
+                }
+              ]
+            }
+    transformation:
+      request:
+        set:
+        - name: x-user-id
+          value: jwt['preferred_username']
+        - name: x-user-tier
+          value: jwt['tier']
+        - name: x-org
+          value: jwt['org']
+---
+# RBAC enforcement on LLM + MCP routes — requires valid JWT with org=kla
+# Replaces base/auth-policy.yaml llm-rbac
+apiVersion: enterpriseagentgateway.solo.io/v1alpha1
+kind: EnterpriseAgentgatewayPolicy
+metadata:
+  name: llm-rbac
+  namespace: agentgateway-system
+spec:
+  targetRefs:
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: bedrock
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mock
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp
+  - group: gateway.networking.k8s.io
+    kind: HTTPRoute
+    name: mcp-docs
+  traffic:
+    authorization:
+      policy:
+        matchExpressions:
+        - 'jwt.org == "kla"'

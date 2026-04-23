@@ -1,0 +1,156 @@
+# Source: dexidp/dex examples/k8s
+# Adapted for KLA demo — 2026-04-22
+# Dex serves as the OIDC identity broker; in production this brokers Azure Entra ID.
+# Demo tokens are pre-minted by gen-token.sh using the same issuer URL for reliability.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dex
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dex
+  namespace: dex
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dex
+rules:
+- apiGroups: ["dex.coreos.com"]
+  resources: ["*"]
+  verbs: ["*"]
+- apiGroups: ["apiextensions.k8s.io"]
+  resources: ["customresourcedefinitions"]
+  verbs: ["create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dex
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dex
+subjects:
+- kind: ServiceAccount
+  name: dex
+  namespace: dex
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dex-config
+  namespace: dex
+data:
+  config.yaml: |
+    issuer: http://dex.dex.svc.cluster.local:5556
+    storage:
+      type: kubernetes
+      config:
+        inCluster: true
+    web:
+      http: 0.0.0.0:5556
+    logger:
+      level: debug
+    oauth2:
+      skipApprovalScreen: true
+      responseTypes: ["code", "token", "id_token"]
+    enablePasswordDB: true
+    staticPasswords:
+    - email: alice@kla.com
+      hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYNFkAIASd7oCLdvk9G"
+      username: alice
+      userID: alice-kla-001
+      groups: ["kla-premium", "kla-users"]
+    - email: bob@kla.com
+      hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYNFkAIASd7oCLdvk9G"
+      username: bob
+      userID: bob-kla-002
+      groups: ["kla-standard", "kla-users"]
+    - email: charlie@kla.com
+      hash: "$2a$10$2b2cU8CPhOTaGrs1HRQuAueS7JTT5ZHsHSzYNFkAIASd7oCLdvk9G"
+      username: charlie
+      userID: charlie-kla-003
+      groups: ["kla-free", "kla-users"]
+    staticClients:
+    - id: kla-demo-client
+      secret: kla-demo-client-secret
+      name: KLA Demo Client
+      redirectURIs:
+      - http://localhost:8000/callback
+      - http://localhost:5556/callback
+    # password hash above is bcrypt of "kla-demo-2026"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dex
+  namespace: dex
+  labels:
+    app: dex
+    demo-customer: kla
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dex
+  template:
+    metadata:
+      labels:
+        app: dex
+        demo-customer: kla
+    spec:
+      serviceAccountName: dex
+      containers:
+      - name: dex
+        image: ghcr.io/dexidp/dex:v2.41.1
+        command: ["/usr/local/bin/dex", "serve", "/etc/dex/config.yaml"]
+        ports:
+        - containerPort: 5556
+          name: http
+        volumeMounts:
+        - name: config
+          mountPath: /etc/dex
+          readOnly: true
+        resources:
+          requests:
+            cpu: 50m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 5556
+          initialDelaySeconds: 10
+          periodSeconds: 30
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 5556
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: config
+        configMap:
+          name: dex-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dex
+  namespace: dex
+  labels:
+    app: dex
+spec:
+  selector:
+    app: dex
+  ports:
+  - port: 5556
+    targetPort: 5556
+    protocol: TCP
+    name: http
+  type: ClusterIP

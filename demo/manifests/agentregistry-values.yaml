@@ -1,0 +1,31 @@
+# AgentRegistry Helm values for KLA demo — 2026-04-22
+# Source: ~/field-poc-singtel/agentregistry/charts/agentregistry/ (v0.2.1)
+# Install via: helm install agentregistry demo/agentregistry-chart/ -n agentregistry ...
+
+replicaCount: 1
+
+config:
+  enableAnonymousAuth: false
+  disableBuiltinSeed: true
+  # jwtPrivateKey set during install via --set config.jwtPrivateKey=$(openssl rand -hex 32)
+
+database:
+  postgres:
+    bundled:
+      ephemeral: true   # emptyDir — data is ephemeral, sufficient for demo
+      image:
+        registry: docker.io
+        repository: pgvector
+        name: pgvector
+        tag: pg17
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+podLabels:
+  demo-customer: kla

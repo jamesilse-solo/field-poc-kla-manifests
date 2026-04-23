@@ -1,0 +1,4 @@
+# Demo-only credentials — never commit
+.env
+certs/demo-jwt.key
+certs/demo-jwt.pub
