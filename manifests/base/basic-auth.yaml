@@ -59,23 +59,6 @@ spec:
         name: ui-auth
         namespace: agentgateway-system
 ---
-# Apply to Grafana route
-apiVersion: enterpriseagentgateway.solo.io/v1alpha1
-kind: EnterpriseAgentgatewayPolicy
-metadata:
-  name: grafana-basic-auth
-  namespace: agentgateway-system
-spec:
-  targetRefs:
-  - group: gateway.networking.k8s.io
-    kind: HTTPRoute
-    name: grafana
-  traffic:
-    entExtAuth:
-      authConfigRef:
-        name: ui-auth
-        namespace: agentgateway-system
----
 # Apply to Gloo UI route
 apiVersion: enterpriseagentgateway.solo.io/v1alpha1
 kind: EnterpriseAgentgatewayPolicy
