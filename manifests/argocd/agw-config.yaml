@@ -7,7 +7,7 @@ spec:
   project: default
   source:
     repoURL: https://github.com/jamesilse-solo/field-poc-kla-manifests.git
-    targetRevision: main
+    targetRevision: gke
     path: manifests/base
   destination:
     server: https://kubernetes.default.svc

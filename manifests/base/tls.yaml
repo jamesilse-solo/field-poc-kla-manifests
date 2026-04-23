@@ -42,7 +42,6 @@ spec:
   dnsNames:
   - "agentgateway-proxy"
   - "agentgateway-proxy.agentgateway-system.svc.cluster.local"
-  - "*.elb.us-west-2.amazonaws.com"
   issuerRef:
     name: agw-ca-issuer
     kind: Issuer
